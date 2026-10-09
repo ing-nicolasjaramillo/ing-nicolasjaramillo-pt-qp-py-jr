@@ -195,6 +195,24 @@ def test_perfil_invalido_o_mayuscula_devuelve_422(perfil: str):
     assert respuesta.status_code == 422
 
 
+@pytest.mark.parametrize(
+    "perfil",
+    [None, "", "General"],
+    ids=["null", "vacio", "capitalizado"],
+)
+def test_perfil_nulo_vacio_o_no_canonico_devuelve_422(perfil: str | None):
+    respuesta = cliente.post(
+        "/tarifas/calcular",
+        json={
+            "tarjeta": "T-PERFIL-INVALIDO",
+            "perfil": perfil,
+            "validaciones": [],
+        },
+    )
+
+    assert respuesta.status_code == 422
+
+
 def test_perfil_ausente_se_asume_general():
     respuesta = cliente.post(
         "/tarifas/calcular",
