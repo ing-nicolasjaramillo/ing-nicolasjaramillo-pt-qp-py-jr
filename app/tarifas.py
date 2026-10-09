@@ -1,14 +1,23 @@
 """Cálculo de lo que se le cobra a una tarjeta por sus validaciones."""
 
-from app.config import DESCUENTOS, MULTIPLO_REDONDEO, TARIFA_BASE
+from app.config import (
+    DESCUENTOS,
+    MULTIPLO_REDONDEO,
+    PORCENTAJE_BASE,
+    TARIFA_BASE,
+)
 from app.modelos import Cobro, Perfil, RespuestaTarifa, SolicitudTarifa
 
 
 def aplicar_descuento(valor: int, perfil: Perfil) -> int:
     """Aplica el descuento del perfil y redondea al múltiplo de 50 más cercano."""
-    descuento = DESCUENTOS[perfil.value] / 100
-    valor_con_descuento = valor * (1 - descuento)
-    return round(valor_con_descuento / MULTIPLO_REDONDEO) * MULTIPLO_REDONDEO
+    porcentaje_descuento = DESCUENTOS[perfil.value]
+    numerador = valor * (PORCENTAJE_BASE - porcentaje_descuento)
+    denominador = PORCENTAJE_BASE * MULTIPLO_REDONDEO
+    unidades, residuo = divmod(numerador, denominador)
+    if residuo >= denominador - residuo:
+        unidades += 1
+    return unidades * MULTIPLO_REDONDEO
 
 
 def calcular_tarifa(solicitud: SolicitudTarifa) -> RespuestaTarifa:
