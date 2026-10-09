@@ -1,0 +1,126 @@
+Propósito : Esta bitacora es un análisis del contexto de la prueba, y tiene como propósito funcionar como SDD o fuente de verdad, a partir de este análisis se va a construir la solución utilizando Opencode.
+
+# 1 . Análisis e interiorización general 
+
+Antes de tocar codigo lo primero es comprender el contexto actual, cómo funcionan los viajes actualmente, cómo se realizan los cobros, cómo llegan los datos, cómo se está respondiendo a las peticiones.
+Una vez comprendido esto, el enfoque es sobre la nueva funcionalidad, qué cambios tendrá, qué se debe agregar, cuáles es la nueva categoria que se va a implementar, qué perfiles, qué descuentos, qué reglas tendrá.
+Finalmnte se analiza el código actual heredado, qué archivos tenemos, las funciones existentes, cómo es la lógica actual, qué responsabilidades tenemos.
+
+## Resumen de lo que hay que hacer
+- Integrar la nueva funcionalidad de tarifa transbordo
+- Solucionar el bug que tiene un usuario al consultar el historial de su tarjeta le aparecen cálculos de otras tarjetas.
+- Verificar que el servicio corra con Docker
+
+# Tarea 1: FEATURE TRANSBORDO
+
+## 1.2 . Anotaciones generales
+
+14 estaciones
+
+Costo de 1 viaje actualmente $3200
+
+Validacion = cada vez que la tarjeta pasa por un torniquete.
+Viaje = empieza con una validación que paga tarifa. Dura 90 minutos contados desde esa primera validación
+Qué es un transbordo? Es un segundo o tercer recorrido que ocurre dentro los 90 minutos a partir de la primera tarifa
+<!-- --------------------------------------------------------------------- -->
+Perfiles y descuentos
+general -> 0% 
+estudiante -> 35%
+adulto_mayor -> 55%
+<!-- --------------------------------------------------------------------- -->
+validacion(viajes)|tipo
+1er : tarifa-> descuento según perfil (0,35 o 55)
+2do : transbordo -> 500
+3er : transbordo_gratis -> gratis
+4to : se reinicia el proceso y se considera viaje inicial (tarifa)
+
+Los descuentos se aplican a cada validacion
+<!-- --------------------------------------------------------------------- -->
+
+Los redondeos se al multiplo de 50 más cercano, si queda en la mitad aproxima hacia arriba. No usar round()
+Ejemplo: estudiante, transbordo: 325 → 350
+Asignar los posibles valores que puede tener "tipo" (tarifa, transbordo, transbordo_gratis) en la respuesta
+<!-- --------------------------------------------------------------------- -->
+
+## 1.3 Restricciones: 
+- Lo descuentos se hacen según el perfil y aplican a cada cobro (cada registro que venga en validaciones)
+- No pueden haber dos validaciones con el mismo id
+- En una tarjeta no pueden haber dos validaciones con diferente id pero mismo instante de fecha_hora, ya que no puede viajarse desde dos sitios al mismo instante, si ocurre es un error. debe compararse por instante, no por texto. 11:58:27Z y 06:58:27-05:00 son el mismo momento 
+- Si llega una petición con "perfil" distinto a los 3 permitidos lanza error
+- Si no llega el campo perfil, se considera general
+
+## 1.4 Validaciones
+- Se debe validar que fecha_hora este en el formato esperado
+- se debe validar que fecha_hora trae zona horaria de lo contrario lanza error
+- "tipo" debe tener un valor de los tres posibles (tarifa, transbordo, transbordo_gratis)
+- Validar que "valor" y "total" sean pesos y enteros
+- Se debe validar si "perfil" no viene entonces se asigna el valor general
+- Se debe validar si "perfil" viene vacío "" o null; se responde con el error 422
+- Se debe validar si "perfil" no viene vacío, entonces debe tener uno de los 3 valores posibles (general, estudiante, adulto_mayor)
+
+
+## 1.5 Asignación de tipo de viaje (tarifa, transbordo, transbordo_gratis)
+
+El cálculo se hace sobre las "validaciones" ya ordenadas cronológicamente y lleva dos datos de estado: 'inicio_viaje' (fecha_hora de la validación que abrió el viaje) y transbordos_usados (0, 1 o 2)
+
+- Sin viaje abierto: (es la primera de la lista) -> tarifa. 
+    Se abre el viaje: inicio_viaje = esta validación y transbordos_usados = 0.
+- Diferencia con inicio_viaje > 90 min → tarifa. Se abre viaje nuevo.
+- Diferencia ≤ 90 min y transbordos_usados = 0 -> transbordo; transbordos_usados += 1.
+- Diferencia ≤ 90 min y transbordos_usados = 1 -> transbordo_gratis transbordos_usados = 2.
+- Diferencia ≤ 90 min y transbordos_usados = 2 -> tarifa. Se abre viaje nuevo.
+
+## 1.6 Datos de ejemplo (validaciones_03-10.json)
+Las validaciones no llegan ordenadas cronológicamnte
+Hay diferencias entre las zonas de una misma tarjeta
+Existen viajes que pueden estar en el limite de 90 min pero que pase de un día a otro
+Los cobros se devuelven ordenadas cronológicamente
+
+## 1.7 Casos borde
+
+| Caso | Resultado esperado |
+|---|---|
+| Sin validaciones | 200, `cobros: []`, `total: 0` |
+| Una sola validación | 1 cobro `tarifa` |
+| Validación exactamente a 90:00 del inicio | `transbordo` |
+| Validación a 90:01 del inicio | `tarifa` |
+| 0:00 → 1:00 → 2:00 | `tarifa`, `transbordo`, `tarifa` |
+| 4 validaciones dentro de 90 min | `tarifa`, `transbordo`, `transbordo_gratis`, `tarifa` |
+| Viaje nuevo tras el 3er intento: la siguiente validación dentro de 90 min de **ese** inicio | `transbordo` |
+| Validaciones desordenadas en la entrada | Se calculan y devuelven en orden cronológico |
+| Zonas horarias mezcladas (`Z` y `-05:00`) en la misma tarjeta | Se comparan por instante real |
+| Viaje que cruza medianoche | Se trata igual que cualquier otro |
+| `fecha_hora` sin zona horaria | 422 |
+| `id` repetido | 422 |
+| `perfil` inválido o en mayúscula | 422 |
+| `perfil` ausente | `general` |
+| Redondeo en la mitad exacta | Sube |
+| `transbordo_gratis` con descuento | 0 |
+| Misma estación dos veces dentro de la ventana | Cuenta como `transbordo`; la estación no influye |
+| Misma instante de `fecha_hora` con distinto `id` | 422 |
+
+## 1.8 Supuestos
+Misma instante de fecha_hora con distinto id.se responde con código 422 y se rechaza.
+perfil: null o "" Se trata como inválido (422). Solo la ausencia del campo en la solicitud equivale a 'general'.
+fecha_hora en la respuesta se devuelve con la misma zona horaria con que llegó, sin convertirla a ningún estandar
+
+## 1.9 Plan de implementación (un commit por paso)
+1. **Modelos** (`modelos.py`): `fecha_hora` que exija zona horaria; `tipo` cerrado a los tres valores; validar `id` duplicados en `SolicitudTarifa`.
+2. **Redondeo** (`tarifas.py`): `aplicar_descuento` con aritmética entera y mitad hacia arriba. Generalizarlo para que sirva a tarifa y transbordo.
+3. **Asignación de tipos** (`tarifas.py`): ordenar por instante y aplicar la lógica de 1.5. Usar `VALOR_TRANSBORDO` y `VENTANA_TRANSBORDO_MIN` de `config.py`; no escribir valores fijos en el código.
+4. **Tests**: un test por cada caso borde (1.7), más el ejemplo oficial (T-004417 → 3.200 + 500 = 3.700).
+
+## 1.10 Restricciones para la IA
+- No modificar el contrato del endpoint (nombres, tipos, estructura).
+- Consultar antes de modificar cualquier archivo.
+- No tocar `pyproject.toml`: los warnings se tratan como errores y no se desactiva.
+- No adelantar la Tarea 2 (BUG-17).
+
+## 1.11 Fuera de alcance
+- Los datos llegan cuando hay señal, así que un error no se detecta en el instante en que ocurre.
+- No es posible saber si dos personas usan la misma tarjeta. Dos pases con 10 s de diferencia tienen id y fecha_hora distintos, y el sistema los cobra como `tarifa` + `transbordo`.
+- Se espera que las fechas vengan correctamente pero se valida de todos modos
+
+
+# Tarea 2: CORREGIR BUG
+- Pendiente de solución
