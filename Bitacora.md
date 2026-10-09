@@ -123,4 +123,43 @@ fecha_hora en la respuesta se devuelve con la misma zona horaria con que llegó,
 
 
 # Tarea 2: CORREGIR BUG
-- Pendiente de solución
+
+## 2.1 Descripción error
+Al consultar el método GET /tarjetas/{tarjeta}/historial aparecen cálculos de otras tarjetas.
+Pasa en producción; en local, con una sola tarjeta, no se reproduce.
+
+## 2.2 Origen 
+En app/historial.py la lista calculos está declarada en el cuerpo de la clase HistorialTarjeta, no dentro de '__init__':
+Ejemplo:
+    class HistorialTarjeta:
+        calculos: list[RespuestaTarifa] = []   # atributo de CLASE
+
+Un atributo de clase existe una unica vez y lo comparten todas las instancias, a pesar de que 'obtener_historial' crea un HistorialTarjeta distinto por tarjeta, todos apuntan a un misma lista. Cada 'registrar()' hace '.append' sobre esa lista compartida, y 'listar()' devuelve todo lo que haya dentro de ella, sin importar de qué tarjeta venga la consulta.
+
+Parece correcto porque la sintaxis 'campo: tipo = valor' se usa en Pydantic y dataclasses, donde cada instancia sí recibe su copia. Pero HistorialTarjeta es una clase normal de Python.
+
+## 2.3 ¿Por que no se reproducía en local ?
+Al tratar de recrearse con una sola tarjeta en local, todos los cálculos de la lista compartida son de esa tarjeta, entonces la mezcla no se nota. Se  ecesitan al menos dos tarjetas distintas para verla.
+
+## 2.4 Por qué el test existente no lo detectó
+test_historial_registra_el_calculo usa una sola tarjeta y verifica 'len(...) >= 1'. Pasa aunque el historial tenga cálculos de otras tarjetas.
+
+## 2.5 Solución propuesta
+Mover 'calculos' al '__init__' como un atributo de instancia ('self.calculos = []'), para que cada HistorialTarjeta tenga su propia lista.
+Cambio mínimo: no se toca main.py ni el contrato del endpoint.
+
+## 2.6 Cómo verificar si se corrigió el bug
+Test de API: calcular para dos tarjetas distintas (A y B) y verificar que:
+- el historial de A tiene exactamente sus cálculos y todos son de la tarjeta A;
+- el historial de B tiene exactamente los suyos y no hay ninguno de A.
+Debe fallar antes de la corrección y pasar después.
+
+## 2.7 Plan (un commit por paso)
+1) Test que reproduce el bug (en rojo).
+2) Corrección en historial.py y testear neuvamente (test en verde).
+
+## 2.8 Fuera de alcance
+- Actual historial vive no persiste, este se pierde al reiniciar el servicio.
+- Con varios procesos (workers) cada uno tendría su propio historial.
+- No hay control de concurrencia sobre el diccionario global '_historiales'.
+- Los tests comparten estado global entre sí; idealmente se limpiaría entre tests.
