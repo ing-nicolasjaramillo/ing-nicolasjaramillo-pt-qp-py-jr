@@ -1,7 +1,8 @@
-.venv
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
 
-# Bitacoras no rastreadas hasta que se termine la prueba.
+# Bitácoras no rastreadas hasta terminar la prueba
 Bitacora_IA.md
 Notas.md
-
-app/__pycache__ tests/__pycache__
