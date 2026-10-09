@@ -15,7 +15,7 @@ Prueba_Quipux: Los agentes no diseñan la lógica de negocio; la verifican contr
 - Consultar antes de modificar cualquier archivo (Bitácora 1.10).
 - No tocar: `pyproject.toml` (warnings = errores, no se desactiva), `.git/`.
 - No modificar el contrato de `POST /tarifas/calcular`.
-- Alcance actual: SOLO el feature de transbordos. BUG-17 (historial) y Docker quedan fuera.
+- Alcance actual: BUG-17 (historial, Bitácora Tarea 2), no tocar la lógica de tarifas.
 
 ## Comandos
 - Tests: `pytest -q`
