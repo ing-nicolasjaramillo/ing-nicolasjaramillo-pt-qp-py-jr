@@ -163,3 +163,16 @@ Debe fallar antes de la corrección y pasar después.
 - Con varios procesos (workers) cada uno tendría su propio historial.
 - No hay control de concurrencia sobre el diccionario global '_historiales'.
 - Los tests comparten estado global entre sí; idealmente se limpiaría entre tests.
+
+# Tarea 3: DOCKER
+
+## 3.1 Prueba de funcionamiento
+Actualmente al levantar el contenedor para comprobar nos encontramos que el servicio uvicorn se expone dentro del contenedor en la dirección lookpback (127.0.0.1) pero no es accesible desde la máquina host, lo que deja en evidencia que es necesario ajustar la dirección por la cual se expone el servicio.
+
+Además, al apoyarme en Claude para el análisis de la salida al levantar el contenedor, comprendí que actualmente se está copiando archivos innecesarios a la imágen, como el entorno virtual, el contenido de .git, pytest_cache y el contexto de .opencode; por lo que se puede optimizar mucho la imágen.
+
+## 3.2 Solución
+Para solucionar la primera situación se debe modificar el Dockerfile y agregar '--host 0.0.0.0' al comando de uvicorn. Esto significa que se reciben peticiones por cualquier entrada del contenedor, permitiendo acceder desde la maquina host.
+Además se modifica docker-compose.yml para limitar el aceeso del puerto "127.0.0.1:8000:8000". Así se agrega seguridad para la práctica, limitando a que solo se pueda abrir desde la máquina host.
+
+y para la solución de la segunda situación, se crea un .dockerignore para agregar todo lo que no es contexto necesario para la imagen, haciendolo más liviano.
