@@ -1,4 +1,4 @@
-Propósito : Esta bitacora es un análisis del contexto de la prueba, y tiene como propósito funcionar como SDD o fuente de verdad, a partir de este análisis se va a construir la solución utilizando Opencode.
+Propósito : Esta bitacora es un análisis del contexto de la prueba, y tiene como propósito funcionar como Spec Driven Development o fuente de verdad, a partir de este análisis se va a construir la solución utilizando Opencode como herramienta.
 
 # 1 . Análisis e interiorización general 
 
